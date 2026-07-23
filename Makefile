@@ -3,7 +3,7 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 DIST := $(ROOT)/dist
 APP := $(DIST)/CursorGauge.app
 BIN_NAME := CursorGauge
-VERSION := 0.3.0
+VERSION := 0.3.1
 RELEASE_ZIP := $(DIST)/CursorGauge-v$(VERSION)-macOS-arm64.zip
 RELEASE_SHA := $(RELEASE_ZIP).sha256
 
