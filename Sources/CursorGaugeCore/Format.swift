@@ -310,15 +310,19 @@ public func parsePeriodUsageResponse(_ json: Any?) -> PeriodUsage? {
     return nil
 }
 
+/// True when the included plan is exhausted and on-demand should lead the UI.
+public func shouldPrioritizeOnDemand(_ usage: PeriodUsage) -> Bool {
+    usage.kind == .cents
+        && usage.remaining <= 0
+        && (usage.onDemandLimit ?? 0) > 0
+}
+
 /// Compact menu-bar title text (no IDE icon glyphs).
 public func formatStatusText(
     _ usage: PeriodUsage,
     displayMode: StatusDisplayMode = .dollarsRemaining
 ) -> String {
-    let useOnDemand =
-        usage.kind == .cents
-        && usage.remaining <= 0
-        && (usage.onDemandLimit ?? 0) > 0
+    let useOnDemand = shouldPrioritizeOnDemand(usage)
     let remaining = useOnDemand
         ? usage.onDemandRemaining
             ?? max(0, (usage.onDemandLimit ?? 0) - (usage.onDemandUsed ?? 0))

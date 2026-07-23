@@ -31,13 +31,15 @@ final class GaugePopoverController: NSViewController {
     private let updatedLabel = NSTextField(labelWithString: "")
     private let statusMessageLabel = NSTextField(wrappingLabelWithString: "")
 
-    // Included
+    // Included / on-demand (order swaps when included plan is exhausted)
+    private let spendSectionsStack = NSStackView()
+    private let includedSection = NSStackView()
     private let includedUsedLabel = NSTextField(labelWithString: "")
     private let includedLimitLabel = NSTextField(labelWithString: "")
     private let includedRemainingLabel = NSTextField(labelWithString: "")
     private let includedProgress = NSProgressIndicator()
+    private let spendSectionSpacer = NSView()
 
-    // On-demand
     private let onDemandSection = NSStackView()
     private let onDemandUsedLabel = NSTextField(labelWithString: "")
     private let onDemandLimitLabel = NSTextField(labelWithString: "")
@@ -179,6 +181,7 @@ final class GaugePopoverController: NSViewController {
         }
 
         setMetricSectionsVisible(true)
+        applySpendSectionOrder(prioritizeOnDemand: shouldPrioritizeOnDemand(usage))
         relayout()
     }
 
@@ -250,10 +253,10 @@ final class GaugePopoverController: NSViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeSeparator())
-        contentStack.addArrangedSubview(makeIncludedSection())
-        contentStack.addArrangedSubview(spacer(8))
-        contentStack.addArrangedSubview(onDemandSection)
+        configureIncludedSection()
         configureOnDemandSection()
+        configureSpendSectionsStack(prioritizeOnDemand: false)
+        contentStack.addArrangedSubview(spendSectionsStack)
         contentStack.addArrangedSubview(makeSeparator())
         contentStack.addArrangedSubview(makeStatsSection())
         contentStack.addArrangedSubview(makeSeparator())
@@ -286,6 +289,30 @@ final class GaugePopoverController: NSViewController {
         footer.textColor = .tertiaryLabelColor
         footer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         contentStack.addArrangedSubview(footer)
+    }
+
+    private func configureSpendSectionsStack(prioritizeOnDemand: Bool) {
+        spendSectionsStack.orientation = .vertical
+        spendSectionsStack.alignment = .leading
+        spendSectionsStack.spacing = 0
+        spendSectionSpacer.translatesAutoresizingMaskIntoConstraints = false
+        spendSectionSpacer.heightAnchor.constraint(equalToConstant: 8).isActive = true
+        applySpendSectionOrder(prioritizeOnDemand: prioritizeOnDemand)
+    }
+
+    private func applySpendSectionOrder(prioritizeOnDemand: Bool) {
+        for view in spendSectionsStack.arrangedSubviews {
+            spendSectionsStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        let first = prioritizeOnDemand ? onDemandSection : includedSection
+        let second = prioritizeOnDemand ? includedSection : onDemandSection
+        spendSectionsStack.addArrangedSubview(first)
+        if !first.isHidden && !second.isHidden {
+            spendSectionsStack.addArrangedSubview(spendSectionSpacer)
+        }
+        spendSectionsStack.addArrangedSubview(second)
     }
 
     private func makeHeader() -> NSView {
@@ -333,19 +360,18 @@ final class GaugePopoverController: NSViewController {
         return stack
     }
 
-    private func makeIncludedSection() -> NSView {
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
+    private func configureIncludedSection() {
+        includedSection.orientation = .vertical
+        includedSection.alignment = .leading
+        includedSection.spacing = 4
 
-        stack.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
+        includedSection.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
         styleSecondary(includedUsedLabel)
         styleSecondary(includedLimitLabel)
         styleSecondary(includedRemainingLabel)
-        stack.addArrangedSubview(includedUsedLabel)
-        stack.addArrangedSubview(includedLimitLabel)
-        stack.addArrangedSubview(includedRemainingLabel)
+        includedSection.addArrangedSubview(includedUsedLabel)
+        includedSection.addArrangedSubview(includedLimitLabel)
+        includedSection.addArrangedSubview(includedRemainingLabel)
 
         includedProgress.isIndeterminate = false
         includedProgress.style = .bar
@@ -355,9 +381,8 @@ final class GaugePopoverController: NSViewController {
         includedProgress.translatesAutoresizingMaskIntoConstraints = false
         includedProgress.heightAnchor.constraint(equalToConstant: 12).isActive = true
         includedProgress.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 40).isActive = true
-        stack.addArrangedSubview(spacer(2))
-        stack.addArrangedSubview(includedProgress)
-        return stack
+        includedSection.addArrangedSubview(spacer(2))
+        includedSection.addArrangedSubview(includedProgress)
     }
 
     private func configureOnDemandSection() {

@@ -222,6 +222,8 @@ do {
         "50%",
         "included plan remains primary until exhausted"
     )
+    expect(shouldPrioritizeOnDemand(exhaustedPlan), "prioritize on-demand when included is empty")
+    expect(!shouldPrioritizeOnDemand(planStillAvailable), "keep included first while remaining")
 }
 
 do {
