@@ -159,6 +159,12 @@ public func usageProgressFraction(used: Double, limit: Double) -> Double {
     return max(0, min(1, used / limit))
 }
 
+/// Clamped 0…1 remaining bar fill (`remaining / limit`): full when unused, empty when depleted.
+public func remainingProgressFraction(remaining: Double, limit: Double) -> Double {
+    guard limit > 0, remaining.isFinite, limit.isFinite else { return 0 }
+    return max(0, min(1, remaining / limit))
+}
+
 /// Percentage of the included plan consumed, derived from `used / limit`.
 public func formatPlanUsedPercent(used: Double, limit: Double) -> String {
     let percent = usageProgressFraction(used: used, limit: limit) * 100
