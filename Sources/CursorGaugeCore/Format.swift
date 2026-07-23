@@ -302,25 +302,37 @@ public func formatStatusText(
     _ usage: PeriodUsage,
     displayMode: StatusDisplayMode = .dollarsRemaining
 ) -> String {
+    let useOnDemand =
+        usage.kind == .cents
+        && usage.remaining <= 0
+        && (usage.onDemandLimit ?? 0) > 0
+    let remaining = useOnDemand
+        ? usage.onDemandRemaining
+            ?? max(0, (usage.onDemandLimit ?? 0) - (usage.onDemandUsed ?? 0))
+        : usage.remaining
+    let limit = useOnDemand ? (usage.onDemandLimit ?? 0) : usage.limit
+    let label = useOnDemand ? " OD left" : " left"
+
     switch displayMode {
     case .dollarsRemaining:
         switch usage.kind {
         case .cents:
-            return "\(formatUsdFromCents(usage.remaining)) left"
+            return "\(formatUsdFromCents(remaining))\(label)"
         case .requests:
-            let rem = usage.remaining.truncatingRemainder(dividingBy: 1) == 0
-                ? String(Int(usage.remaining))
-                : String(usage.remaining)
-            return "\(rem) left"
+            let rem = remaining.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(remaining))
+                : String(remaining)
+            return "\(rem)\(label)"
         }
     case .percentRemaining:
-        if let pct = remainingPercent(of: usage) {
+        if limit > 0 {
+            let pct = max(0, min(100, remaining / limit * 100))
             let rounded = pct.truncatingRemainder(dividingBy: 1) < 0.05
-                ? String(format: "%.0f%% left", pct)
-                : String(format: "%.1f%% left", pct)
+                ? String(format: "%.0f%%%@", pct, label)
+                : String(format: "%.1f%%%@", pct, label)
             return rounded
         }
-        return "?% left"
+        return "?%\(label)"
     }
 }
 

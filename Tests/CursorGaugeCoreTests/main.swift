@@ -178,6 +178,45 @@ do {
 }
 
 do {
+    let exhaustedPlan = PeriodUsage(
+        kind: .cents,
+        used: 40_000,
+        limit: 40_000,
+        remaining: 0,
+        onDemandUsed: 0,
+        onDemandLimit: 30_000,
+        onDemandRemaining: 30_000,
+        source: .getCurrentPeriodUsage
+    )
+    let dollars = formatStatusText(exhaustedPlan, displayMode: .dollarsRemaining)
+    expect(dollars.contains("300"), "on-demand dollar fallback amount")
+    expect(dollars.contains("OD left"), "on-demand dollar fallback label")
+    expectEqual(
+        formatStatusText(exhaustedPlan, displayMode: .percentRemaining),
+        "100% OD left",
+        "on-demand percent fallback"
+    )
+
+    var partiallyUsedOnDemand = exhaustedPlan
+    partiallyUsedOnDemand.onDemandUsed = 7_500
+    partiallyUsedOnDemand.onDemandRemaining = 22_500
+    expectEqual(
+        formatStatusText(partiallyUsedOnDemand, displayMode: .percentRemaining),
+        "75% OD left",
+        "on-demand remaining percent"
+    )
+
+    var planStillAvailable = exhaustedPlan
+    planStillAvailable.used = 20_000
+    planStillAvailable.remaining = 20_000
+    expectEqual(
+        formatStatusText(planStillAvailable, displayMode: .percentRemaining),
+        "50% left",
+        "included plan remains primary until exhausted"
+    )
+}
+
+do {
     let err = formatErrorStatus("Not signed in")
     expect(err.title.contains("CursorGauge"), "error title")
     expect(err.details.contains(where: { $0.contains("Not signed in") }), "error detail")
