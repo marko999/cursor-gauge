@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.1
+
+- Menu bar falls back to on-demand when included plan is exhausted (`$300 OD` / `100% OD`)
+- Progress bars show remaining allowance (full = unused, empty = depleted)
+- On-demand section moves to the top of the popover when included remaining is zero
+- Hotkey **⌥⌘C** toggles the panel
+- Shorter menu-bar status text
+
 ## v0.3.0
 
 First public release of **CursorGauge**.
