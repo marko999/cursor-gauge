@@ -19,7 +19,10 @@ let package = Package(
         .executableTarget(
             name: "CursorGauge",
             dependencies: ["CursorGaugeCore"],
-            path: "Sources/CursorGauge"
+            path: "Sources/CursorGauge",
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+            ]
         ),
         // CLT-only environments lack XCTest; use a small assert runner instead.
         .executableTarget(

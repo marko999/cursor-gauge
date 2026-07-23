@@ -31,13 +31,15 @@ final class GaugePopoverController: NSViewController {
     private let updatedLabel = NSTextField(labelWithString: "")
     private let statusMessageLabel = NSTextField(wrappingLabelWithString: "")
 
-    // Included
+    // Included / on-demand (order swaps when included plan is exhausted)
+    private let spendSectionsStack = NSStackView()
+    private let includedSection = NSStackView()
     private let includedUsedLabel = NSTextField(labelWithString: "")
     private let includedLimitLabel = NSTextField(labelWithString: "")
     private let includedRemainingLabel = NSTextField(labelWithString: "")
     private let includedProgress = NSProgressIndicator()
+    private let spendSectionSpacer = NSView()
 
-    // On-demand
     private let onDemandSection = NSStackView()
     private let onDemandUsedLabel = NSTextField(labelWithString: "")
     private let onDemandLimitLabel = NSTextField(labelWithString: "")
@@ -149,21 +151,33 @@ final class GaugePopoverController: NSViewController {
         includedLimitLabel.stringValue = "Limit  \(formatUsageAmount(usage.limit, kind: usage.kind))"
         includedRemainingLabel.stringValue =
             "Remaining  \(formatUsageAmount(usage.remaining, kind: usage.kind))"
-        configureProgress(includedProgress, used: usage.used, limit: usage.limit, label: "Included usage")
+        configureProgress(
+            includedProgress,
+            remaining: usage.remaining,
+            limit: usage.limit,
+            label: "Included remaining"
+        )
 
         let hasOnDemand =
             usage.onDemandLimit != nil || usage.onDemandUsed != nil || usage.onDemandRemaining != nil
         onDemandSection.isHidden = !hasOnDemand
         if hasOnDemand {
             let used = usage.onDemandUsed ?? 0
+            let remaining =
+                usage.onDemandRemaining ?? max(0, (usage.onDemandLimit ?? 0) - used)
             onDemandUsedLabel.stringValue = "Used  \(formatUsageAmount(used, kind: usage.kind))"
             onDemandLimitLabel.stringValue =
                 "Limit  \(usage.onDemandLimit.map { formatUsageAmount($0, kind: usage.kind) } ?? "—")"
             onDemandRemainingLabel.stringValue =
-                "Remaining  \(usage.onDemandRemaining.map { formatUsageAmount($0, kind: usage.kind) } ?? "—")"
+                "Remaining  \(formatUsageAmount(remaining, kind: usage.kind))"
             if let limit = usage.onDemandLimit, limit > 0 {
                 onDemandProgress.isHidden = false
-                configureProgress(onDemandProgress, used: used, limit: limit, label: "On-demand usage")
+                configureProgress(
+                    onDemandProgress,
+                    remaining: remaining,
+                    limit: limit,
+                    label: "On-demand remaining"
+                )
             } else {
                 onDemandProgress.isHidden = true
             }
@@ -179,6 +193,7 @@ final class GaugePopoverController: NSViewController {
         }
 
         setMetricSectionsVisible(true)
+        applySpendSectionOrder(prioritizeOnDemand: shouldPrioritizeOnDemand(usage))
         relayout()
     }
 
@@ -250,10 +265,10 @@ final class GaugePopoverController: NSViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeSeparator())
-        contentStack.addArrangedSubview(makeIncludedSection())
-        contentStack.addArrangedSubview(spacer(8))
-        contentStack.addArrangedSubview(onDemandSection)
+        configureIncludedSection()
         configureOnDemandSection()
+        configureSpendSectionsStack(prioritizeOnDemand: false)
+        contentStack.addArrangedSubview(spendSectionsStack)
         contentStack.addArrangedSubview(makeSeparator())
         contentStack.addArrangedSubview(makeStatsSection())
         contentStack.addArrangedSubview(makeSeparator())
@@ -286,6 +301,30 @@ final class GaugePopoverController: NSViewController {
         footer.textColor = .tertiaryLabelColor
         footer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         contentStack.addArrangedSubview(footer)
+    }
+
+    private func configureSpendSectionsStack(prioritizeOnDemand: Bool) {
+        spendSectionsStack.orientation = .vertical
+        spendSectionsStack.alignment = .leading
+        spendSectionsStack.spacing = 0
+        spendSectionSpacer.translatesAutoresizingMaskIntoConstraints = false
+        spendSectionSpacer.heightAnchor.constraint(equalToConstant: 8).isActive = true
+        applySpendSectionOrder(prioritizeOnDemand: prioritizeOnDemand)
+    }
+
+    private func applySpendSectionOrder(prioritizeOnDemand: Bool) {
+        for view in spendSectionsStack.arrangedSubviews {
+            spendSectionsStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        let first = prioritizeOnDemand ? onDemandSection : includedSection
+        let second = prioritizeOnDemand ? includedSection : onDemandSection
+        spendSectionsStack.addArrangedSubview(first)
+        if !first.isHidden && !second.isHidden {
+            spendSectionsStack.addArrangedSubview(spendSectionSpacer)
+        }
+        spendSectionsStack.addArrangedSubview(second)
     }
 
     private func makeHeader() -> NSView {
@@ -333,19 +372,18 @@ final class GaugePopoverController: NSViewController {
         return stack
     }
 
-    private func makeIncludedSection() -> NSView {
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
+    private func configureIncludedSection() {
+        includedSection.orientation = .vertical
+        includedSection.alignment = .leading
+        includedSection.spacing = 4
 
-        stack.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
+        includedSection.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
         styleSecondary(includedUsedLabel)
         styleSecondary(includedLimitLabel)
         styleSecondary(includedRemainingLabel)
-        stack.addArrangedSubview(includedUsedLabel)
-        stack.addArrangedSubview(includedLimitLabel)
-        stack.addArrangedSubview(includedRemainingLabel)
+        includedSection.addArrangedSubview(includedUsedLabel)
+        includedSection.addArrangedSubview(includedLimitLabel)
+        includedSection.addArrangedSubview(includedRemainingLabel)
 
         includedProgress.isIndeterminate = false
         includedProgress.style = .bar
@@ -355,9 +393,8 @@ final class GaugePopoverController: NSViewController {
         includedProgress.translatesAutoresizingMaskIntoConstraints = false
         includedProgress.heightAnchor.constraint(equalToConstant: 12).isActive = true
         includedProgress.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 40).isActive = true
-        stack.addArrangedSubview(spacer(2))
-        stack.addArrangedSubview(includedProgress)
-        return stack
+        includedSection.addArrangedSubview(spacer(2))
+        includedSection.addArrangedSubview(includedProgress)
     }
 
     private func configureOnDemandSection() {
@@ -508,6 +545,23 @@ final class GaugePopoverController: NSViewController {
             settingsContainer.addArrangedSubview(button)
         }
 
+        let hotkeyTitle = NSTextField(labelWithString: "Hotkey")
+        hotkeyTitle.font = .systemFont(ofSize: 11, weight: .medium)
+        let hotkeyRow = NSTextField(labelWithString: "Toggle panel: ⌥⌘C")
+        hotkeyRow.font = .systemFont(ofSize: 12)
+        hotkeyRow.textColor = .secondaryLabelColor
+        hotkeyRow.setAccessibilityLabel("Toggle panel with Option Command C")
+        let hotkeyHint = NSTextField(
+            wrappingLabelWithString:
+                "Works even when the menu-bar item is hidden by other icons."
+        )
+        hotkeyHint.font = .systemFont(ofSize: 10)
+        hotkeyHint.textColor = .tertiaryLabelColor
+        settingsContainer.addArrangedSubview(spacer(4))
+        settingsContainer.addArrangedSubview(hotkeyTitle)
+        settingsContainer.addArrangedSubview(hotkeyRow)
+        settingsContainer.addArrangedSubview(hotkeyHint)
+
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginToggled)
         launchAtLoginCheckbox.font = .systemFont(ofSize: 12)
@@ -600,14 +654,14 @@ final class GaugePopoverController: NSViewController {
 
     private func configureProgress(
         _ indicator: NSProgressIndicator,
-        used: Double,
+        remaining: Double,
         limit: Double,
         label: String
     ) {
-        let fraction = usageProgressFraction(used: used, limit: limit)
+        let fraction = remainingProgressFraction(remaining: remaining, limit: limit)
         indicator.doubleValue = fraction
         indicator.setAccessibilityLabel(label)
-        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent used")
+        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent remaining")
     }
 
     private func setMetricSectionsVisible(_ visible: Bool) {

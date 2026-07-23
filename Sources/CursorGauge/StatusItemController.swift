@@ -54,6 +54,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
 
     func start() {
         schedulePolling()
+        HotKeyCenter.shared.onToggle = { [weak self] in
+            Task { @MainActor in
+                self?.togglePopoverFromHotKey()
+            }
+        }
+        HotKeyCenter.shared.registerToggleHotKey()
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -79,6 +85,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
 
     func stop() {
         closePopover()
+        HotKeyCenter.shared.onToggle = nil
+        HotKeyCenter.shared.unregister()
         refreshTimer?.invalidate()
         refreshTimer = nil
         summaryTask?.cancel()
@@ -98,6 +106,16 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
     // MARK: - Popover
 
     @objc private func statusItemClicked(_ sender: Any?) {
+        togglePopover()
+    }
+
+    private func togglePopoverFromHotKey() {
+        // Keep the status item claimed even when the bar is crowded.
+        statusItem.isVisible = true
+        togglePopover()
+    }
+
+    private func togglePopover() {
         if popover.isShown {
             closePopover()
         } else {
@@ -108,6 +126,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
     private func showPopover() {
         guard let button = statusItem.button else { return }
         renderPopoverContent()
+        NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         // Ensure models load when details UI opens (if cache stale).
         Task { await ensureModelsIfNeeded(force: false) }

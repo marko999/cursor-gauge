@@ -120,6 +120,19 @@ public func formatUsdFromCents(_ cents: Double) -> String {
     return formatter.string(from: NSNumber(value: dollars)) ?? String(format: "$%.2f", dollars)
 }
 
+/// Compact status-bar currency (keeps menu-bar width small).
+public func formatCompactUsdFromCents(_ cents: Double) -> String {
+    let dollars = cents / 100
+    guard dollars.isFinite else { return "$?" }
+    if abs(dollars - dollars.rounded()) < 0.05 {
+        return String(format: "$%.0f", dollars.rounded())
+    }
+    if abs(dollars) >= 100 {
+        return String(format: "$%.0f", dollars.rounded())
+    }
+    return String(format: "$%.1f", dollars)
+}
+
 public func formatTokenCount(_ tokens: Double) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
@@ -144,6 +157,12 @@ public func formatUsageAmount(_ value: Double, kind: ValueKind) -> String {
 public func usageProgressFraction(used: Double, limit: Double) -> Double {
     guard limit > 0, used.isFinite, limit.isFinite else { return 0 }
     return max(0, min(1, used / limit))
+}
+
+/// Clamped 0…1 remaining bar fill (`remaining / limit`): full when unused, empty when depleted.
+public func remainingProgressFraction(remaining: Double, limit: Double) -> Double {
+    guard limit > 0, remaining.isFinite, limit.isFinite else { return 0 }
+    return max(0, min(1, remaining / limit))
 }
 
 /// Percentage of the included plan consumed, derived from `used / limit`.
@@ -297,30 +316,46 @@ public func parsePeriodUsageResponse(_ json: Any?) -> PeriodUsage? {
     return nil
 }
 
+/// True when the included plan is exhausted and on-demand should lead the UI.
+public func shouldPrioritizeOnDemand(_ usage: PeriodUsage) -> Bool {
+    usage.kind == .cents
+        && usage.remaining <= 0
+        && (usage.onDemandLimit ?? 0) > 0
+}
+
 /// Compact menu-bar title text (no IDE icon glyphs).
 public func formatStatusText(
     _ usage: PeriodUsage,
     displayMode: StatusDisplayMode = .dollarsRemaining
 ) -> String {
+    let useOnDemand = shouldPrioritizeOnDemand(usage)
+    let remaining = useOnDemand
+        ? usage.onDemandRemaining
+            ?? max(0, (usage.onDemandLimit ?? 0) - (usage.onDemandUsed ?? 0))
+        : usage.remaining
+    let limit = useOnDemand ? (usage.onDemandLimit ?? 0) : usage.limit
+    let suffix = useOnDemand ? " OD" : ""
+
     switch displayMode {
     case .dollarsRemaining:
         switch usage.kind {
         case .cents:
-            return "\(formatUsdFromCents(usage.remaining)) left"
+            return "\(formatCompactUsdFromCents(remaining))\(suffix)"
         case .requests:
-            let rem = usage.remaining.truncatingRemainder(dividingBy: 1) == 0
-                ? String(Int(usage.remaining))
-                : String(usage.remaining)
-            return "\(rem) left"
+            let rem = remaining.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(remaining))
+                : String(remaining)
+            return "\(rem)\(suffix)"
         }
     case .percentRemaining:
-        if let pct = remainingPercent(of: usage) {
+        if limit > 0 {
+            let pct = max(0, min(100, remaining / limit * 100))
             let rounded = pct.truncatingRemainder(dividingBy: 1) < 0.05
-                ? String(format: "%.0f%% left", pct)
-                : String(format: "%.1f%% left", pct)
+                ? String(format: "%.0f%%%@", pct, suffix)
+                : String(format: "%.1f%%%@", pct, suffix)
             return rounded
         }
-        return "?% left"
+        return "?%\(suffix)"
     }
 }
 
@@ -413,7 +448,7 @@ public func formatModelAggregateLines(_ rows: [ModelUsageAggregate]) -> [String]
 
 public func formatErrorStatus(_ message: String) -> (title: String, details: [String]) {
     (
-        title: "CursorGauge ?",
+        title: "CG ?",
         details: [
             "CursorGauge",
             message,
@@ -424,7 +459,7 @@ public func formatErrorStatus(_ message: String) -> (title: String, details: [St
 
 public func formatLoadingStatus() -> (title: String, details: [String]) {
     (
-        title: "CursorGauge…",
+        title: "CG…",
         details: ["Refreshing Cursor plan usage…"]
     )
 }
