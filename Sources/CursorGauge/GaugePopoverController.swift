@@ -508,6 +508,23 @@ final class GaugePopoverController: NSViewController {
             settingsContainer.addArrangedSubview(button)
         }
 
+        let hotkeyTitle = NSTextField(labelWithString: "Hotkey")
+        hotkeyTitle.font = .systemFont(ofSize: 11, weight: .medium)
+        let hotkeyRow = NSTextField(labelWithString: "Toggle panel: ⌥⌘C")
+        hotkeyRow.font = .systemFont(ofSize: 12)
+        hotkeyRow.textColor = .secondaryLabelColor
+        hotkeyRow.setAccessibilityLabel("Toggle panel with Option Command C")
+        let hotkeyHint = NSTextField(
+            wrappingLabelWithString:
+                "Works even when the menu-bar item is hidden by other icons."
+        )
+        hotkeyHint.font = .systemFont(ofSize: 10)
+        hotkeyHint.textColor = .tertiaryLabelColor
+        settingsContainer.addArrangedSubview(spacer(4))
+        settingsContainer.addArrangedSubview(hotkeyTitle)
+        settingsContainer.addArrangedSubview(hotkeyRow)
+        settingsContainer.addArrangedSubview(hotkeyHint)
+
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginToggled)
         launchAtLoginCheckbox.font = .systemFont(ofSize: 12)

@@ -15,13 +15,14 @@ Native macOS menu-bar app that shows your signed-in Cursor plan remaining allowa
 ## Features
 
 - Discovers the existing Cursor session on this Mac (no pasted token)
-- Menu-bar title: **`$ remaining`** (default) or **`% remaining`** — choose in Settings
+- Compact menu-bar title: **`$86`** / **`21%`**, or **`$300 OD`** / **`100% OD`** when the included plan is exhausted
+- Global hotkey **⌥⌘C** toggles the panel even when the status item is crowded out of the menu bar
 - Click the status item for a native vibrancy popover (AppKit `NSVisualEffectView` + standard controls):
   - **Header** — remaining allowance + last-updated
   - **Included / on-demand** — used, limit, remaining with native progress bars
-  - **Auto / API / total %** and billing reset as compact rows
+  - **Auto / API / plan used %** and billing reset as compact rows
   - **Models** — expandable per-model attribution for the **current billing cycle** from dashboard usage events (unofficial semantics; not an invoice)
-  - **Settings** — display preference (`$` / `%`) and optional **Launch at Login**
+  - **Settings** — display preference (`$` / `%`), hotkey note, optional **Launch at Login**
 - Footer actions: **Refresh**, **Open Cursor Usage Dashboard**, **Quit**
 - Summary auto-refresh every **5 minutes**
 - Model event breakdown fetched when the popover opens or on manual Refresh, cached ~**15 minutes**

@@ -141,13 +141,15 @@ do {
     ]
     if let usage = parsePeriodUsageResponse(json) {
         let dollars = formatStatusText(usage, displayMode: .dollarsRemaining)
-        expect(dollars.contains("left"), "status contains left")
+        expect(dollars.hasPrefix("$"), "compact dollar status")
+        expect(!dollars.localizedCaseInsensitiveContains("left"), "no left suffix")
         expect(!dollars.localizedCaseInsensitiveContains("Bearer"), "no Bearer in status")
         expect(!dollars.contains("eyJ"), "no jwt prefix in status")
 
         let percent = formatStatusText(usage, displayMode: .percentRemaining)
-        expect(percent.contains("% left"), "percent mode")
+        expect(percent.contains("%"), "percent mode")
         expect(percent.hasPrefix("90"), "90% remaining")
+        expect(!percent.localizedCaseInsensitiveContains("left"), "compact percent has no left")
 
         let lines = formatOverviewLines(
             usage,
@@ -169,8 +171,8 @@ do {
     if let usage = parsePeriodUsageResponse([
         "gpt-4": ["numRequests": 1, "maxRequestUsage": 10],
     ] as [String: Any]) {
-        expectEqual(formatStatusText(usage, displayMode: .dollarsRemaining), "9 left")
-        expectEqual(formatStatusText(usage, displayMode: .percentRemaining), "90% left")
+        expectEqual(formatStatusText(usage, displayMode: .dollarsRemaining), "9")
+        expectEqual(formatStatusText(usage, displayMode: .percentRemaining), "90%")
     } else {
         failures += 1
         fputs("FAIL: request status parse\n", stderr)
@@ -178,6 +180,10 @@ do {
 }
 
 do {
+    expectEqual(formatCompactUsdFromCents(30_000), "$300", "compact whole dollars")
+    expectEqual(formatCompactUsdFromCents(8_580), "$85.8", "compact one decimal")
+    expectEqual(formatCompactUsdFromCents(0), "$0", "compact zero")
+
     let exhaustedPlan = PeriodUsage(
         kind: .cents,
         used: 40_000,
@@ -188,12 +194,14 @@ do {
         onDemandRemaining: 30_000,
         source: .getCurrentPeriodUsage
     )
-    let dollars = formatStatusText(exhaustedPlan, displayMode: .dollarsRemaining)
-    expect(dollars.contains("300"), "on-demand dollar fallback amount")
-    expect(dollars.contains("OD left"), "on-demand dollar fallback label")
+    expectEqual(
+        formatStatusText(exhaustedPlan, displayMode: .dollarsRemaining),
+        "$300 OD",
+        "on-demand dollar fallback"
+    )
     expectEqual(
         formatStatusText(exhaustedPlan, displayMode: .percentRemaining),
-        "100% OD left",
+        "100% OD",
         "on-demand percent fallback"
     )
 
@@ -202,7 +210,7 @@ do {
     partiallyUsedOnDemand.onDemandRemaining = 22_500
     expectEqual(
         formatStatusText(partiallyUsedOnDemand, displayMode: .percentRemaining),
-        "75% OD left",
+        "75% OD",
         "on-demand remaining percent"
     )
 
@@ -211,14 +219,14 @@ do {
     planStillAvailable.remaining = 20_000
     expectEqual(
         formatStatusText(planStillAvailable, displayMode: .percentRemaining),
-        "50% left",
+        "50%",
         "included plan remains primary until exhausted"
     )
 }
 
 do {
     let err = formatErrorStatus("Not signed in")
-    expect(err.title.contains("CursorGauge"), "error title")
+    expect(err.title.contains("CG"), "error title")
     expect(err.details.contains(where: { $0.contains("Not signed in") }), "error detail")
     expect(!err.details.joined().contains("eyJ"), "no jwt in error")
 }

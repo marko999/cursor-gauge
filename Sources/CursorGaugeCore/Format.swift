@@ -120,6 +120,19 @@ public func formatUsdFromCents(_ cents: Double) -> String {
     return formatter.string(from: NSNumber(value: dollars)) ?? String(format: "$%.2f", dollars)
 }
 
+/// Compact status-bar currency (keeps menu-bar width small).
+public func formatCompactUsdFromCents(_ cents: Double) -> String {
+    let dollars = cents / 100
+    guard dollars.isFinite else { return "$?" }
+    if abs(dollars - dollars.rounded()) < 0.05 {
+        return String(format: "$%.0f", dollars.rounded())
+    }
+    if abs(dollars) >= 100 {
+        return String(format: "$%.0f", dollars.rounded())
+    }
+    return String(format: "$%.1f", dollars)
+}
+
 public func formatTokenCount(_ tokens: Double) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
@@ -311,28 +324,28 @@ public func formatStatusText(
             ?? max(0, (usage.onDemandLimit ?? 0) - (usage.onDemandUsed ?? 0))
         : usage.remaining
     let limit = useOnDemand ? (usage.onDemandLimit ?? 0) : usage.limit
-    let label = useOnDemand ? " OD left" : " left"
+    let suffix = useOnDemand ? " OD" : ""
 
     switch displayMode {
     case .dollarsRemaining:
         switch usage.kind {
         case .cents:
-            return "\(formatUsdFromCents(remaining))\(label)"
+            return "\(formatCompactUsdFromCents(remaining))\(suffix)"
         case .requests:
             let rem = remaining.truncatingRemainder(dividingBy: 1) == 0
                 ? String(Int(remaining))
                 : String(remaining)
-            return "\(rem)\(label)"
+            return "\(rem)\(suffix)"
         }
     case .percentRemaining:
         if limit > 0 {
             let pct = max(0, min(100, remaining / limit * 100))
             let rounded = pct.truncatingRemainder(dividingBy: 1) < 0.05
-                ? String(format: "%.0f%%%@", pct, label)
-                : String(format: "%.1f%%%@", pct, label)
+                ? String(format: "%.0f%%%@", pct, suffix)
+                : String(format: "%.1f%%%@", pct, suffix)
             return rounded
         }
-        return "?%\(label)"
+        return "?%\(suffix)"
     }
 }
 
@@ -425,7 +438,7 @@ public func formatModelAggregateLines(_ rows: [ModelUsageAggregate]) -> [String]
 
 public func formatErrorStatus(_ message: String) -> (title: String, details: [String]) {
     (
-        title: "CursorGauge ?",
+        title: "CG ?",
         details: [
             "CursorGauge",
             message,
@@ -436,7 +449,7 @@ public func formatErrorStatus(_ message: String) -> (title: String, details: [St
 
 public func formatLoadingStatus() -> (title: String, details: [String]) {
     (
-        title: "CursorGauge…",
+        title: "CG…",
         details: ["Refreshing Cursor plan usage…"]
     )
 }
