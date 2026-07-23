@@ -59,8 +59,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.refreshSummaryIfStale()
+                self.refreshSummaryIfStale()
             }
         }
         activeObserver = NotificationCenter.default.addObserver(
@@ -68,8 +69,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.refreshSummaryIfStale()
+                self.refreshSummaryIfStale()
             }
         }
         Task { await refreshSummary() }
@@ -175,8 +177,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, GaugePopoverDeleg
             withTimeInterval: Self.summaryRefreshInterval,
             repeats: true
         ) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                await self?.refreshSummary()
+                await self.refreshSummary()
             }
         }
         timer.tolerance = 15
