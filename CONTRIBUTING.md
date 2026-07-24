@@ -19,7 +19,7 @@ make smoke-check   # bundle / codesign / credential-path scan
 Optional local release zip (not committed):
 
 ```bash
-make release-zip   # dist/CursorGauge-v0.3.3-macOS-arm64.zip + .sha256
+make release-zip   # dist/CursorGauge-v0.3.4-macOS-arm64.zip + .sha256
 ```
 
 ## Workflow

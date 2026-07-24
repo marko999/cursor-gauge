@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4
+
+- Remove redundant “CursorGauge” title/icon from the popover header
+
 ## v0.3.3
 
 - Fix on-demand progress bar to show **remaining** juice (full when unused, empties as you spend)
