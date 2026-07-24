@@ -26,7 +26,6 @@ final class GaugePopoverController: NSViewController {
     private let contentStack = NSStackView()
 
     // Header
-    private let titleLabel = NSTextField(labelWithString: "CursorGauge")
     private let remainingLabel = NSTextField(labelWithString: "—")
     private let updatedLabel = NSTextField(labelWithString: "")
     private let statusMessageLabel = NSTextField(wrappingLabelWithString: "")
@@ -375,25 +374,6 @@ final class GaugePopoverController: NSViewController {
         stack.alignment = .leading
         stack.spacing = 2
 
-        let identity = NSStackView()
-        identity.orientation = .horizontal
-        identity.spacing = 6
-        identity.alignment = .centerY
-
-        let icon = NSImageView()
-        if let image = NSImage(
-            systemSymbolName: "chart.bar.doc.horizontal",
-            accessibilityDescription: "CursorGauge"
-        ) {
-            icon.image = image
-            icon.contentTintColor = .secondaryLabelColor
-            icon.symbolConfiguration = .init(pointSize: 12, weight: .medium)
-        }
-        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
-        identity.addArrangedSubview(icon)
-        identity.addArrangedSubview(titleLabel)
-
         remainingLabel.font = .systemFont(ofSize: 22, weight: .semibold)
         remainingLabel.textColor = .labelColor
         remainingLabel.setAccessibilityLabel("Spending summary")
@@ -405,8 +385,6 @@ final class GaugePopoverController: NSViewController {
         statusMessageLabel.textColor = .secondaryLabelColor
         statusMessageLabel.isHidden = true
 
-        stack.addArrangedSubview(identity)
-        stack.addArrangedSubview(spacer(4))
         stack.addArrangedSubview(remainingLabel)
         stack.addArrangedSubview(updatedLabel)
         stack.addArrangedSubview(statusMessageLabel)
