@@ -31,14 +31,19 @@ final class GaugePopoverController: NSViewController {
     private let updatedLabel = NSTextField(labelWithString: "")
     private let statusMessageLabel = NSTextField(wrappingLabelWithString: "")
 
-    // Included / on-demand (order swaps when included plan is exhausted)
+    // Spending pools / on-demand (order swaps when OD spend has started)
     private let spendSectionsStack = NSStackView()
-    private let includedSection = NSStackView()
+    private let cursorModelsSection = NSStackView()
+    private let cursorModelsUsedLabel = NSTextField(labelWithString: "")
+    private let cursorModelsProgress = NSProgressIndicator()
+    private let otherModelsSection = NSStackView()
+    private let otherModelsUsedLabel = NSTextField(labelWithString: "")
+    private let otherModelsProgress = NSProgressIndicator()
+    private let legacyIncludedSection = NSStackView()
     private let includedUsedLabel = NSTextField(labelWithString: "")
     private let includedLimitLabel = NSTextField(labelWithString: "")
     private let includedRemainingLabel = NSTextField(labelWithString: "")
     private let includedProgress = NSProgressIndicator()
-    private let spendSectionSpacer = NSView()
 
     private let onDemandSection = NSStackView()
     private let onDemandUsedLabel = NSTextField(labelWithString: "")
@@ -47,9 +52,6 @@ final class GaugePopoverController: NSViewController {
     private let onDemandProgress = NSProgressIndicator()
 
     // Stats rows
-    private let autoRow = MetricRowView(title: "Auto")
-    private let apiRow = MetricRowView(title: "API")
-    private let totalRow = MetricRowView(title: "Plan used")
     private let resetRow = MetricRowView(title: "Resets")
 
     // Models
@@ -147,16 +149,40 @@ final class GaugePopoverController: NSViewController {
         remainingLabel.stringValue = formatStatusText(usage, displayMode: displayMode)
         updatedLabel.stringValue = formatUpdatedLabel(lastUpdated)
 
-        includedUsedLabel.stringValue = "Used  \(formatUsageAmount(usage.used, kind: usage.kind))"
-        includedLimitLabel.stringValue = "Limit  \(formatUsageAmount(usage.limit, kind: usage.kind))"
-        includedRemainingLabel.stringValue =
-            "Remaining  \(formatUsageAmount(usage.remaining, kind: usage.kind))"
-        configureProgress(
-            includedProgress,
-            remaining: usage.remaining,
-            limit: usage.limit,
-            label: "Included remaining"
-        )
+        let showPools = hasSpendingPoolPercents(usage)
+        cursorModelsSection.isHidden = !showPools || usage.autoPercentUsed == nil
+        otherModelsSection.isHidden = !showPools || usage.apiPercentUsed == nil
+        legacyIncludedSection.isHidden = showPools
+
+        if let cursor = usage.autoPercentUsed {
+            cursorModelsUsedLabel.stringValue = "Used  \(formatCompactPercentUsed(cursor))"
+            configureUsedProgress(
+                cursorModelsProgress,
+                usedPercent: cursor,
+                label: "Cursor Models used"
+            )
+        }
+        if let other = usage.apiPercentUsed {
+            otherModelsUsedLabel.stringValue = "Used  \(formatCompactPercentUsed(other))"
+            configureUsedProgress(
+                otherModelsProgress,
+                usedPercent: other,
+                label: "Other Models used"
+            )
+        }
+
+        if !showPools {
+            includedUsedLabel.stringValue = "Used  \(formatUsageAmount(usage.used, kind: usage.kind))"
+            includedLimitLabel.stringValue = "Limit  \(formatUsageAmount(usage.limit, kind: usage.kind))"
+            includedRemainingLabel.stringValue =
+                "Remaining  \(formatUsageAmount(usage.remaining, kind: usage.kind))"
+            configureUsedProgress(
+                includedProgress,
+                used: usage.used,
+                limit: usage.limit,
+                label: "Included used"
+            )
+        }
 
         let hasOnDemand =
             usage.onDemandLimit != nil || usage.onDemandUsed != nil || usage.onDemandRemaining != nil
@@ -172,20 +198,17 @@ final class GaugePopoverController: NSViewController {
                 "Remaining  \(formatUsageAmount(remaining, kind: usage.kind))"
             if let limit = usage.onDemandLimit, limit > 0 {
                 onDemandProgress.isHidden = false
-                configureProgress(
+                configureUsedProgress(
                     onDemandProgress,
-                    remaining: remaining,
+                    used: used,
                     limit: limit,
-                    label: "On-demand remaining"
+                    label: "On-demand used"
                 )
             } else {
                 onDemandProgress.isHidden = true
             }
         }
 
-        autoRow.setValue(usage.autoPercentUsed.map { String(format: "%.1f%%", $0) } ?? "—")
-        apiRow.setValue(usage.apiPercentUsed.map { String(format: "%.1f%%", $0) } ?? "—")
-        totalRow.setValue(formatPlanUsedPercent(used: usage.used, limit: usage.limit))
         if let end = usage.periodEnd {
             resetRow.setValue(end.formatted(date: .abbreviated, time: .shortened))
         } else {
@@ -265,7 +288,9 @@ final class GaugePopoverController: NSViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeSeparator())
-        configureIncludedSection()
+        configureCursorModelsSection()
+        configureOtherModelsSection()
+        configureLegacyIncludedSection()
         configureOnDemandSection()
         configureSpendSectionsStack(prioritizeOnDemand: false)
         contentStack.addArrangedSubview(spendSectionsStack)
@@ -307,8 +332,6 @@ final class GaugePopoverController: NSViewController {
         spendSectionsStack.orientation = .vertical
         spendSectionsStack.alignment = .leading
         spendSectionsStack.spacing = 0
-        spendSectionSpacer.translatesAutoresizingMaskIntoConstraints = false
-        spendSectionSpacer.heightAnchor.constraint(equalToConstant: 8).isActive = true
         applySpendSectionOrder(prioritizeOnDemand: prioritizeOnDemand)
     }
 
@@ -318,13 +341,31 @@ final class GaugePopoverController: NSViewController {
             view.removeFromSuperview()
         }
 
-        let first = prioritizeOnDemand ? onDemandSection : includedSection
-        let second = prioritizeOnDemand ? includedSection : onDemandSection
-        spendSectionsStack.addArrangedSubview(first)
-        if !first.isHidden && !second.isHidden {
-            spendSectionsStack.addArrangedSubview(spendSectionSpacer)
+        var sections: [NSView] = []
+        if prioritizeOnDemand {
+            sections.append(onDemandSection)
+            sections.append(cursorModelsSection)
+            sections.append(otherModelsSection)
+            sections.append(legacyIncludedSection)
+        } else {
+            sections.append(cursorModelsSection)
+            sections.append(otherModelsSection)
+            sections.append(legacyIncludedSection)
+            sections.append(onDemandSection)
         }
-        spendSectionsStack.addArrangedSubview(second)
+
+        var addedVisible = false
+        for section in sections {
+            guard !section.isHidden else { continue }
+            if addedVisible {
+                let spacer = NSView()
+                spacer.translatesAutoresizingMaskIntoConstraints = false
+                spacer.heightAnchor.constraint(equalToConstant: 8).isActive = true
+                spendSectionsStack.addArrangedSubview(spacer)
+            }
+            spendSectionsStack.addArrangedSubview(section)
+            addedVisible = true
+        }
     }
 
     private func makeHeader() -> NSView {
@@ -354,7 +395,7 @@ final class GaugePopoverController: NSViewController {
 
         remainingLabel.font = .systemFont(ofSize: 22, weight: .semibold)
         remainingLabel.textColor = .labelColor
-        remainingLabel.setAccessibilityLabel("Remaining allowance")
+        remainingLabel.setAccessibilityLabel("Spending summary")
 
         updatedLabel.font = .systemFont(ofSize: 11)
         updatedLabel.textColor = .tertiaryLabelColor
@@ -372,18 +413,67 @@ final class GaugePopoverController: NSViewController {
         return stack
     }
 
-    private func configureIncludedSection() {
-        includedSection.orientation = .vertical
-        includedSection.alignment = .leading
-        includedSection.spacing = 4
+    private func configureCursorModelsSection() {
+        configurePercentPoolSection(
+            cursorModelsSection,
+            title: "Cursor Models",
+            symbol: "cpu",
+            usedLabel: cursorModelsUsedLabel,
+            progress: cursorModelsProgress
+        )
+    }
 
-        includedSection.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
+    private func configureOtherModelsSection() {
+        configurePercentPoolSection(
+            otherModelsSection,
+            title: "Other Models",
+            symbol: "cloud",
+            usedLabel: otherModelsUsedLabel,
+            progress: otherModelsProgress
+        )
+    }
+
+    private func configurePercentPoolSection(
+        _ section: NSStackView,
+        title: String,
+        symbol: String,
+        usedLabel: NSTextField,
+        progress: NSProgressIndicator
+    ) {
+        section.orientation = .vertical
+        section.alignment = .leading
+        section.spacing = 4
+        section.isHidden = true
+
+        section.addArrangedSubview(sectionHeader(title, symbol: symbol))
+        styleSecondary(usedLabel)
+        section.addArrangedSubview(usedLabel)
+
+        progress.isIndeterminate = false
+        progress.style = .bar
+        progress.minValue = 0
+        progress.maxValue = 1
+        progress.controlSize = .small
+        progress.translatesAutoresizingMaskIntoConstraints = false
+        progress.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        progress.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 40).isActive = true
+        section.addArrangedSubview(spacer(2))
+        section.addArrangedSubview(progress)
+    }
+
+    private func configureLegacyIncludedSection() {
+        legacyIncludedSection.orientation = .vertical
+        legacyIncludedSection.alignment = .leading
+        legacyIncludedSection.spacing = 4
+        legacyIncludedSection.isHidden = true
+
+        legacyIncludedSection.addArrangedSubview(sectionHeader("Included", symbol: "creditcard"))
         styleSecondary(includedUsedLabel)
         styleSecondary(includedLimitLabel)
         styleSecondary(includedRemainingLabel)
-        includedSection.addArrangedSubview(includedUsedLabel)
-        includedSection.addArrangedSubview(includedLimitLabel)
-        includedSection.addArrangedSubview(includedRemainingLabel)
+        legacyIncludedSection.addArrangedSubview(includedUsedLabel)
+        legacyIncludedSection.addArrangedSubview(includedLimitLabel)
+        legacyIncludedSection.addArrangedSubview(includedRemainingLabel)
 
         includedProgress.isIndeterminate = false
         includedProgress.style = .bar
@@ -393,8 +483,8 @@ final class GaugePopoverController: NSViewController {
         includedProgress.translatesAutoresizingMaskIntoConstraints = false
         includedProgress.heightAnchor.constraint(equalToConstant: 12).isActive = true
         includedProgress.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 40).isActive = true
-        includedSection.addArrangedSubview(spacer(2))
-        includedSection.addArrangedSubview(includedProgress)
+        legacyIncludedSection.addArrangedSubview(spacer(2))
+        legacyIncludedSection.addArrangedSubview(includedProgress)
     }
 
     private func configureOnDemandSection() {
@@ -428,14 +518,9 @@ final class GaugePopoverController: NSViewController {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 2
-        stack.addArrangedSubview(autoRow)
-        stack.addArrangedSubview(apiRow)
-        stack.addArrangedSubview(totalRow)
         stack.addArrangedSubview(resetRow)
-        for row in [autoRow, apiRow, totalRow, resetRow] {
-            row.translatesAutoresizingMaskIntoConstraints = false
-            row.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 28).isActive = true
-        }
+        resetRow.translatesAutoresizingMaskIntoConstraints = false
+        resetRow.widthAnchor.constraint(equalToConstant: Self.popoverWidth - 28).isActive = true
         return stack
     }
 
@@ -652,21 +737,35 @@ final class GaugePopoverController: NSViewController {
         label.textColor = .secondaryLabelColor
     }
 
-    private func configureProgress(
+    private func configureUsedProgress(
         _ indicator: NSProgressIndicator,
-        remaining: Double,
+        used: Double,
         limit: Double,
         label: String
     ) {
-        let fraction = remainingProgressFraction(remaining: remaining, limit: limit)
+        let fraction = usageProgressFraction(used: used, limit: limit)
         indicator.doubleValue = fraction
         indicator.setAccessibilityLabel(label)
-        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent remaining")
+        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent used")
+    }
+
+    private func configureUsedProgress(
+        _ indicator: NSProgressIndicator,
+        usedPercent: Double,
+        label: String
+    ) {
+        let fraction = max(0, min(1, usedPercent / 100))
+        indicator.doubleValue = fraction
+        indicator.setAccessibilityLabel(label)
+        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent used")
     }
 
     private func setMetricSectionsVisible(_ visible: Bool) {
-        // Keep structure; values already updated. On error/loading we hide on-demand.
+        // Keep structure; values already updated. On error/loading we hide spend sections.
         if !visible {
+            cursorModelsSection.isHidden = true
+            otherModelsSection.isHidden = true
+            legacyIncludedSection.isHidden = true
             onDemandSection.isHidden = true
         }
     }

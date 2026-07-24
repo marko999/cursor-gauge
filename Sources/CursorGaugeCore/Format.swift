@@ -316,61 +316,125 @@ public func parsePeriodUsageResponse(_ json: Any?) -> PeriodUsage? {
     return nil
 }
 
-/// True when the included plan is exhausted and on-demand should lead the UI.
+/// Compact percent for menu-bar / pool labels (matches spending-page style).
+public func formatCompactPercentUsed(_ value: Double) -> String {
+    let clamped = max(0, min(100, value))
+    if abs(clamped - clamped.rounded()) < 0.05 {
+        return String(format: "%.0f%%", clamped.rounded())
+    }
+    return String(format: "%.1f%%", clamped)
+}
+
+/// True when Cursor returned spending-page pool percents (Cursor Models / Other Models).
+public func hasSpendingPoolPercents(_ usage: PeriodUsage) -> Bool {
+    usage.autoPercentUsed != nil || usage.apiPercentUsed != nil
+}
+
+/// True when on-demand spend has actually started (`used > 0`).
+public func shouldShowOnDemandStatus(_ usage: PeriodUsage) -> Bool {
+    (usage.onDemandUsed ?? 0) > 0
+}
+
+/// True when the on-demand section should lead the popover (real OD spend only).
 public func shouldPrioritizeOnDemand(_ usage: PeriodUsage) -> Bool {
-    usage.kind == .cents
-        && usage.remaining <= 0
-        && (usage.onDemandLimit ?? 0) > 0
+    shouldShowOnDemandStatus(usage)
+}
+
+/// Menu-bar text for Cursor Models (C) / Other Models (O) used percents.
+public func formatPoolStatusText(_ usage: PeriodUsage) -> String? {
+    switch (usage.autoPercentUsed, usage.apiPercentUsed) {
+    case let (cursor?, other?):
+        return "C \(formatCompactPercentUsed(cursor)) · O \(formatCompactPercentUsed(other))"
+    case let (cursor?, nil):
+        return "C \(formatCompactPercentUsed(cursor))"
+    case let (nil, other?):
+        return "O \(formatCompactPercentUsed(other))"
+    default:
+        return nil
+    }
 }
 
 /// Compact menu-bar title text (no IDE icon glyphs).
+///
+/// Prefers spending-page pools (`C 16% · O 31%`). Switches to on-demand only when
+/// OD `used > 0` — not when the dollar included meter alone is exhausted.
 public func formatStatusText(
     _ usage: PeriodUsage,
     displayMode: StatusDisplayMode = .dollarsRemaining
 ) -> String {
-    let useOnDemand = shouldPrioritizeOnDemand(usage)
-    let remaining = useOnDemand
-        ? usage.onDemandRemaining
+    if shouldShowOnDemandStatus(usage) {
+        let remaining =
+            usage.onDemandRemaining
             ?? max(0, (usage.onDemandLimit ?? 0) - (usage.onDemandUsed ?? 0))
-        : usage.remaining
-    let limit = useOnDemand ? (usage.onDemandLimit ?? 0) : usage.limit
-    let suffix = useOnDemand ? " OD" : ""
+        let limit = usage.onDemandLimit ?? 0
+        switch displayMode {
+        case .dollarsRemaining:
+            switch usage.kind {
+            case .cents:
+                return "\(formatCompactUsdFromCents(remaining)) OD"
+            case .requests:
+                let rem = remaining.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(Int(remaining))
+                    : String(remaining)
+                return "\(rem) OD"
+            }
+        case .percentRemaining:
+            if limit > 0 {
+                let pct = max(0, min(100, remaining / limit * 100))
+                return "OD \(formatCompactPercentUsed(pct))"
+            }
+            return "OD ?"
+        }
+    }
 
+    if let pools = formatPoolStatusText(usage) {
+        return pools
+    }
+
+    // Legacy /auth/usage (request counts) or payloads without pool percents.
+    let remaining = usage.remaining
+    let limit = usage.limit
     switch displayMode {
     case .dollarsRemaining:
         switch usage.kind {
         case .cents:
-            return "\(formatCompactUsdFromCents(remaining))\(suffix)"
+            return formatCompactUsdFromCents(remaining)
         case .requests:
             let rem = remaining.truncatingRemainder(dividingBy: 1) == 0
                 ? String(Int(remaining))
                 : String(remaining)
-            return "\(rem)\(suffix)"
+            return rem
         }
     case .percentRemaining:
         if limit > 0 {
             let pct = max(0, min(100, remaining / limit * 100))
-            let rounded = pct.truncatingRemainder(dividingBy: 1) < 0.05
-                ? String(format: "%.0f%%%@", pct, suffix)
-                : String(format: "%.1f%%%@", pct, suffix)
-            return rounded
+            return formatCompactPercentUsed(pct)
         }
-        return "?%\(suffix)"
+        return "?%"
     }
 }
 
 public func formatOverviewLines(_ usage: PeriodUsage, lastUpdated: Date) -> [String] {
     var lines: [String] = []
 
-    switch usage.kind {
-    case .cents:
-        lines.append("Included used: \(formatUsdFromCents(usage.used))")
-        lines.append("Included limit: \(formatUsdFromCents(usage.limit))")
-        lines.append("Included remaining: \(formatUsdFromCents(usage.remaining))")
-    case .requests:
-        lines.append("Included used: \(Int(usage.used)) requests")
-        lines.append("Included limit: \(Int(usage.limit)) requests")
-        lines.append("Included remaining: \(Int(usage.remaining)) requests")
+    if let cursor = usage.autoPercentUsed {
+        lines.append("Cursor Models: \(formatCompactPercentUsed(cursor)) used")
+    }
+    if let other = usage.apiPercentUsed {
+        lines.append("Other Models: \(formatCompactPercentUsed(other)) used")
+    }
+
+    if !hasSpendingPoolPercents(usage) {
+        switch usage.kind {
+        case .cents:
+            lines.append("Included used: \(formatUsdFromCents(usage.used))")
+            lines.append("Included limit: \(formatUsdFromCents(usage.limit))")
+            lines.append("Included remaining: \(formatUsdFromCents(usage.remaining))")
+        case .requests:
+            lines.append("Included used: \(Int(usage.used)) requests")
+            lines.append("Included limit: \(Int(usage.limit)) requests")
+            lines.append("Included remaining: \(Int(usage.remaining)) requests")
+        }
     }
 
     if usage.onDemandLimit != nil || usage.onDemandUsed != nil || usage.onDemandRemaining != nil {
@@ -388,12 +452,6 @@ public func formatOverviewLines(_ usage: PeriodUsage, lastUpdated: Date) -> [Str
 
     if let pct = usage.totalPercentUsed {
         lines.append(String(format: "Total used: %.1f%%", pct))
-    }
-    if let pct = usage.autoPercentUsed {
-        lines.append(String(format: "Auto: %.1f%%", pct))
-    }
-    if let pct = usage.apiPercentUsed {
-        lines.append(String(format: "API: %.1f%%", pct))
     }
 
     if let start = usage.periodStart {
