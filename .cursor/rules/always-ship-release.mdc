@@ -1,0 +1,21 @@
+---
+description: Always ship a GitHub Release after CursorGauge app changes
+alwaysApply: true
+---
+
+# CursorGauge — always ship a release
+
+When shipping **user-facing** CursorGauge changes (UI, menu bar, popover, bundling, versioned behavior):
+
+1. **Do not stop at commit/PR only.** Also cut or update a GitHub Release the user can download.
+2. Default flow after the change is on a branch/PR:
+   - bump `Makefile` `VERSION` + `Resources/Info.plist` (`CFBundleShortVersionString` / `CFBundleVersion`)
+   - update `CHANGELOG.md`
+   - `make test && make release-zip`
+   - `git push` + open/update PR targeting `main`
+   - `gh release create vX.Y.Z …` with the zip + `.sha256` (or upload `--clobber` only for a same-tag hotfix the user explicitly wants rewritten)
+3. **Local verify:** `pkill -x CursorGauge` (if needed) then `open dist/CursorGauge.app` so the user can see the build.
+4. **Never merge** the PR — user merges.
+5. Docs-only / test-only / internal refactors with no user-visible app change do **not** require a release unless the user asks.
+
+If unsure whether a change is user-facing, **prefer shipping a patch release**.
