@@ -132,6 +132,8 @@ do {
             "remaining": 9000,
             "limit": 10000,
             "totalPercentUsed": 10,
+            "autoPercentUsed": 16.0,
+            "apiPercentUsed": 30.7,
         ],
         "spendLimitUsage": [
             "individualUsed": 0,
@@ -140,25 +142,24 @@ do {
         ],
     ]
     if let usage = parsePeriodUsageResponse(json) {
-        let dollars = formatStatusText(usage, displayMode: .dollarsRemaining)
-        expect(dollars.hasPrefix("$"), "compact dollar status")
-        expect(!dollars.localizedCaseInsensitiveContains("left"), "no left suffix")
-        expect(!dollars.localizedCaseInsensitiveContains("Bearer"), "no Bearer in status")
-        expect(!dollars.contains("eyJ"), "no jwt prefix in status")
+        let status = formatStatusText(usage, displayMode: .dollarsRemaining)
+        expectEqual(status, "C 16% · O 30.7%", "pool status ignores dollar mode")
+        expect(!status.localizedCaseInsensitiveContains("Bearer"), "no Bearer in status")
+        expect(!status.contains("eyJ"), "no jwt prefix in status")
 
         let percent = formatStatusText(usage, displayMode: .percentRemaining)
-        expect(percent.contains("%"), "percent mode")
-        expect(percent.hasPrefix("90"), "90% remaining")
-        expect(!percent.localizedCaseInsensitiveContains("left"), "compact percent has no left")
+        expectEqual(percent, "C 16% · O 30.7%", "pool status in percent mode")
 
         let lines = formatOverviewLines(
             usage,
             lastUpdated: Date(timeIntervalSince1970: 1_753_264_800)
         )
         let joined = lines.joined(separator: "\n")
-        expect(joined.contains("Included used:"), "details Included used")
+        expect(joined.contains("Cursor Models:"), "details Cursor Models")
+        expect(joined.contains("Other Models:"), "details Other Models")
         expect(joined.contains("On-demand"), "details On-demand")
         expect(joined.contains("Resets:"), "details Resets")
+        expect(!joined.contains("Included used:"), "skip dollar included when pools exist")
         expect(!joined.localizedCaseInsensitiveContains("Authorization"), "no Authorization")
         expect(!joined.contains("eyJ"), "no jwt in details")
     } else {
@@ -184,7 +185,7 @@ do {
     expectEqual(formatCompactUsdFromCents(8_580), "$85.8", "compact one decimal")
     expectEqual(formatCompactUsdFromCents(0), "$0", "compact zero")
 
-    let exhaustedPlan = PeriodUsage(
+    let dollarMeterFullPoolsOpen = PeriodUsage(
         kind: .cents,
         used: 40_000,
         limit: 40_000,
@@ -192,38 +193,43 @@ do {
         onDemandUsed: 0,
         onDemandLimit: 30_000,
         onDemandRemaining: 30_000,
+        autoPercentUsed: 16.0,
+        apiPercentUsed: 30.7,
         source: .getCurrentPeriodUsage
     )
     expectEqual(
-        formatStatusText(exhaustedPlan, displayMode: .dollarsRemaining),
-        "$300 OD",
-        "on-demand dollar fallback"
+        formatStatusText(dollarMeterFullPoolsOpen, displayMode: .dollarsRemaining),
+        "C 16% · O 30.7%",
+        "pools stay primary while OD unused"
     )
     expectEqual(
-        formatStatusText(exhaustedPlan, displayMode: .percentRemaining),
-        "100% OD",
-        "on-demand percent fallback"
+        formatStatusText(dollarMeterFullPoolsOpen, displayMode: .percentRemaining),
+        "C 16% · O 30.7%",
+        "pools stay primary in percent mode"
+    )
+    expect(
+        !shouldPrioritizeOnDemand(dollarMeterFullPoolsOpen),
+        "do not prioritize OD when only dollar included is empty"
+    )
+    expect(
+        !shouldShowOnDemandStatus(dollarMeterFullPoolsOpen),
+        "OD status off while used is zero"
     )
 
-    var partiallyUsedOnDemand = exhaustedPlan
-    partiallyUsedOnDemand.onDemandUsed = 7_500
-    partiallyUsedOnDemand.onDemandRemaining = 22_500
+    var onDemandActive = dollarMeterFullPoolsOpen
+    onDemandActive.onDemandUsed = 7_500
+    onDemandActive.onDemandRemaining = 22_500
     expectEqual(
-        formatStatusText(partiallyUsedOnDemand, displayMode: .percentRemaining),
-        "75% OD",
-        "on-demand remaining percent"
+        formatStatusText(onDemandActive, displayMode: .percentRemaining),
+        "OD 75%",
+        "on-demand remaining percent when OD used"
     )
-
-    var planStillAvailable = exhaustedPlan
-    planStillAvailable.used = 20_000
-    planStillAvailable.remaining = 20_000
     expectEqual(
-        formatStatusText(planStillAvailable, displayMode: .percentRemaining),
-        "50%",
-        "included plan remains primary until exhausted"
+        formatStatusText(onDemandActive, displayMode: .dollarsRemaining),
+        "$225 OD",
+        "on-demand dollar remaining when OD used"
     )
-    expect(shouldPrioritizeOnDemand(exhaustedPlan), "prioritize on-demand when included is empty")
-    expect(!shouldPrioritizeOnDemand(planStillAvailable), "keep included first while remaining")
+    expect(shouldPrioritizeOnDemand(onDemandActive), "prioritize OD only after spend starts")
 }
 
 do {

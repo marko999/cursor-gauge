@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Align menu bar + popover with Cursor spending pools: `C` / `O` used percents from `autoPercentUsed` / `apiPercentUsed`
+- Switch collapsed status to on-demand only when OD `used > 0` (not when the dollar included meter alone is empty)
+- Progress bars follow **used** (empty at $0 OD), matching the dashboard metaphor
+
 ## v0.3.1
 
 - Menu bar falls back to on-demand when included plan is exhausted (`$300 OD` / `100% OD`)

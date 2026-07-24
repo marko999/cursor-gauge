@@ -8,9 +8,9 @@ public enum StatusDisplayMode: String, CaseIterable, Sendable, Equatable {
     public var settingsLabel: String {
         switch self {
         case .dollarsRemaining:
-            return "$ remaining"
+            return "$ OD remaining (when on-demand is active)"
         case .percentRemaining:
-            return "% remaining"
+            return "% OD remaining (when on-demand is active)"
         }
     }
 }
