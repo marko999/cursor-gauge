@@ -4,7 +4,7 @@
 
 - Align menu bar + popover with Cursor spending pools: `C` / `O` used percents from `autoPercentUsed` / `apiPercentUsed`
 - Switch collapsed status to on-demand only when OD `used > 0` (not when the dollar included meter alone is empty)
-- Progress bars follow **used** (empty at $0 OD), matching the dashboard metaphor
+- Cursor / Other Models bars follow **used**; on-demand bar follows **remaining** (full when unused)
 
 ## v0.3.1
 

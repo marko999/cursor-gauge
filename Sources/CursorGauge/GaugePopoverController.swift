@@ -198,11 +198,12 @@ final class GaugePopoverController: NSViewController {
                 "Remaining  \(formatUsageAmount(remaining, kind: usage.kind))"
             if let limit = usage.onDemandLimit, limit > 0 {
                 onDemandProgress.isHidden = false
-                configureUsedProgress(
+                // Remaining fill: full when unused, empties as OD is spent.
+                configureRemainingProgress(
                     onDemandProgress,
-                    used: used,
+                    remaining: remaining,
                     limit: limit,
-                    label: "On-demand used"
+                    label: "On-demand remaining"
                 )
             } else {
                 onDemandProgress.isHidden = true
@@ -758,6 +759,18 @@ final class GaugePopoverController: NSViewController {
         indicator.doubleValue = fraction
         indicator.setAccessibilityLabel(label)
         indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent used")
+    }
+
+    private func configureRemainingProgress(
+        _ indicator: NSProgressIndicator,
+        remaining: Double,
+        limit: Double,
+        label: String
+    ) {
+        let fraction = remainingProgressFraction(remaining: remaining, limit: limit)
+        indicator.doubleValue = fraction
+        indicator.setAccessibilityLabel(label)
+        indicator.setAccessibilityValue("\(Int((fraction * 100).rounded())) percent remaining")
     }
 
     private func setMetricSectionsVisible(_ visible: Bool) {
