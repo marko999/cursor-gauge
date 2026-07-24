@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.3.3
+
+- Fix on-demand progress bar to show **remaining** juice (full when unused, empties as you spend)
+- Cursor / Other Models bars stay as **used** percent (spending-page style)
+
+## v0.3.2
 
 - Align menu bar + popover with Cursor spending pools: `C` / `O` used percents from `autoPercentUsed` / `apiPercentUsed`
 - Switch collapsed status to on-demand only when OD `used > 0` (not when the dollar included meter alone is empty)
-- Progress bars follow **used** (empty at $0 OD), matching the dashboard metaphor
 
 ## v0.3.1
 

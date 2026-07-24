@@ -17,7 +17,7 @@ macOS menu-bar app for your signed-in Cursor plan — spending pools next to the
 
 - 📊 Compact status: `C 16% · O 31%` (Cursor / Other Models), then `OD 82%` / `$xx OD` when on-demand actually spends
 - ⌨️ **⌥⌘C** opens the panel even if the icon is crowded out of the menu bar
-- 💳 Spending-page pools + on-demand (used bars, same idea as cursor.com/dashboard)
+- 💳 Spending-page pools (used bars) + on-demand remaining bar (full when unused)
 - 🤖 Per-model spend for the current billing cycle
 - ⚙️ `$` / `%` OD display when on-demand is active; optional Launch at Login
 - 🔒 Uses your existing Cursor login — no pasted tokens, no telemetry
